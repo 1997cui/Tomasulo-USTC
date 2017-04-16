@@ -81,10 +81,12 @@ public class Tomasulo extends JFrame implements ActionListener{
     class RsStatus
     {
         public int qj,qk;
+        public int left_cycle;
         public boolean busy;
     }
     private RsStatus rsStatus[] = new RsStatus[5];
     private boolean ldStatus[]=new boolean[3];
+    private int regStatus[]=new int[16];
 
     /*
      * (1)说明：根据你的设计完善指令设置中的下拉框内容
@@ -97,7 +99,8 @@ public class Tomasulo extends JFrame implements ActionListener{
 					regist_table[]={"F0","F2","F4","F6","F8","F10","F12","F14","F16"
 							,"F18","F20","F22","F24","F26","F28","F30","F32"},
 					rx[]={"R0","R1","R2","R3","R4","R5","R6"},
-					ix[]={"0","1","2","3","4","5","6","7"};
+					ix[]={"0","1","2","3","4","5","6","7"},
+                    rsType[]={"Add1","Add2","Add3","Mult1","Mult2"};
 
 	/*
 	 * (2)说明：请根据你的设计指定各个面板（指令状态，保留站，Load部件，寄存器部件）的大小
@@ -430,9 +433,12 @@ public class Tomasulo extends JFrame implements ActionListener{
 		}
 		//init internal status
         issue_pc=0;
+        for (int i=0;i<=4;++i) rsStatus[i] = new RsStatus();
         for (int i=0;i<=4;++i) rsStatus[i].busy=false;
+        for (int i=0;i<=5;++i) insStatus[i] = new InsStatus();
         for (int i=0;i<=5;++i) insStatus[i].status=0;
         for (int i=0;i<=2;++i) ldStatus[i] = false;
+        for (int i=0;i<=15;++i) regStatus[i] = -1;
 	}
 
 /*
@@ -563,6 +569,8 @@ public class Tomasulo extends JFrame implements ActionListener{
                     insStatus[issue_pc].status=1;
                     insStatus[issue_pc].which_s=0; //0: LD 1: rs
                     insStatus[issue_pc].which_loc=slot;
+                    regStatus[intv[issue_pc][1]/2]=slot+5;
+                    my_regsters[2][(intv[issue_pc][1]/2)+1]="Load"+Integer.toString(slot+1);
                 }
                 break;
             case 2:
@@ -579,10 +587,41 @@ public class Tomasulo extends JFrame implements ActionListener{
                 }
                 if (isIssued)
                 {
+                    rsStatus[slot].busy=true;
                     insStatus[issue_pc].status=1;
                     insStatus[issue_pc].which_s=1;
                     insStatus[issue_pc].which_loc=slot;
-                    my_inst_type[issue_pc + 1][1]
+                    my_inst_type[issue_pc + 1][1] = Integer.toString(cnow);
+                    boolean hasDependency=false;
+                    int ri, rj, rk;
+                    ri = intv[issue_pc][1]/2;
+                    rj = intv[issue_pc][2]/2;
+                    rk = intv[issue_pc][3]/2;
+                    my_rs[slot+1][2]="yes";
+                    my_rs[slot+1][3]=inst_type[current_type];
+                    rsStatus[slot].qj=rsStatus[slot].qk=-1;
+                    if (regStatus[rj] != -1)
+                    {
+                        rsStatus[slot].qj=regStatus[rj];
+                        if (rsStatus[slot].qj >=5) my_rs[slot+1][6]="Load"+Integer.toString(rsStatus[slot].qj-4);
+                        else my_rs[slot+1][6]=rsType[rsStatus[slot].qj];
+                        hasDependency=true;
+                    } else
+                    {
+                        my_rs[slot+1][4]=regist_table[rj];
+                    }
+                    if (regStatus[rk] != -1)
+                    {
+                        rsStatus[slot].qk=regStatus[rk];
+                        if (rsStatus[slot].qk >=5) my_rs[slot+1][7]="Load"+Integer.toString(rsStatus[slot].qk-4);
+                        else my_rs[slot+1][7]=rsType[rsStatus[slot].qk];
+                        hasDependency=true;
+                    } else
+                    {
+                        my_rs[slot+1][5]=regist_table[rk];
+                    }
+                    if (!hasDependency) rsStatus[slot].left_cycle=time[1];
+                    else rsStatus[slot].left_cycle=time[1]+1;
                 }
                 break;
         }
